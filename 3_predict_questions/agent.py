@@ -46,7 +46,7 @@ class MCPAgent:
         }
         messages = [system_prompt] + state["messages"]
         response = self.tool_model.invoke(messages)
-        # We return a list, because this will get added to the existing list
+
         return {"messages": [response]}
 
     def _call_final_model(self, state: AgentState):
