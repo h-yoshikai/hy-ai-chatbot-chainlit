@@ -4,7 +4,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph
 
 import chainlit as cl
+import chainlit.data as cl_data
+from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
+from chainlit.types import ThreadDict
 
+import asyncpg
 from agent import MCPAgent
 from dotenv import load_dotenv
 import os
@@ -12,13 +16,29 @@ import os
 agent: StateGraph = None
 
 load_dotenv()
-api_key =os.getenv("OPENAI_API_KEY")
 llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0)
+
+# for chat app to store message history to DB
+dbhost = os.environ.get("DB_HOST")
+dbuser = os.environ.get("DB_USER")
+dbpassword = os.environ.get("DB_PASSWORD")
+dbname = os.environ.get("DB_NAME")
+conn_str = f"postgresql+asyncpg://{dbuser}:{dbpassword}@{dbhost}:5432/{dbname}"
+cl_data._data_layer = SQLAlchemyDataLayer(conn_str)
 
 # create agent asyncronously because getting MCP tools is asyncronous
 async def create_agent():
     global agent
     agent = await MCPAgent.create(llm)
+
+@cl.oauth_callback
+def oauth_callback(
+    provider_id: str,
+    token: str,
+    raw_user_data: dict[str, str],
+    default_user: cl.User,
+) -> cl.User | None:
+    return default_user
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -87,3 +107,15 @@ async def on_action(action: cl.Action):
     await cl.Message(content=action.payload["value"], author="user").send()
     # generate an answer against the action that user pressed
     await on_message(cl.Message(content=action.payload["value"]))
+
+@cl.on_chat_resume
+async def on_chat_resume(thread: ThreadDict):
+    steps = thread.get("steps", [])
+    history = []
+    for message in steps:
+        if message["type"] == "user_message":
+            history.append(HumanMessage(content=message["output"]))
+        else:
+            history.append(AIMessage(content=message["output"]))
+
+    cl.user_session.set("history", history)
