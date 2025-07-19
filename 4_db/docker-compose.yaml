@@ -1,0 +1,27 @@
+services:
+  app:
+    container_name: chainlit-app
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    env_file: ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    container_name: chainlit-db
+    image: postgres:17.2-alpine3.20
+    ports:
+      - 5432:5432
+    env_file: ./.db.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+volumes:
+  db-data:
