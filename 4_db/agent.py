@@ -80,7 +80,7 @@ class MCPAgent:
         client = MultiServerMCPClient(
             {
                 "weather": {
-                    "url": "http://localhost:8001/sse/",
+                    "url": "http://host.docker.internal:8001/sse/",
                     "transport": "sse",
                 }
             }
