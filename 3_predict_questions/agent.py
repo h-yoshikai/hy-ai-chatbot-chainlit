@@ -24,15 +24,17 @@ class MCPAgent:
         tool_node = ToolNode(tools=self.tools)
         builder.add_node("normal", self._call_model)
         builder.add_node("tools", tool_node)
+        builder.add_node("prediction", self._call_prediction_model)
         builder.add_node("final", self._call_final_model)
 
         builder.add_edge(START, "normal")
         builder.add_conditional_edges(
             "normal",
             tools_condition,
-            {"tools": "tools", "__end__": "final"}
+            {"tools": "tools", "__end__": "prediction"}
         )
         builder.add_edge("tools", "normal")
+        builder.add_edge("prediction", "final")
         builder.add_edge("final", END)
 
         return builder.compile()
@@ -59,6 +61,19 @@ class MCPAgent:
         # overwrite the last AI message from the agent
         response.id = last_ai_message.id
         return {"messages": [response]}
+
+    def _call_prediction_model(self, state: AgentState):
+        system_prompt = {
+            "role": "system",
+            "content": "一番最後のAIの回答に対して、現在ユーザが興味を持っていると思われる次の質問をユーザ目線で3つ予測してください。それに伴い、過去の会話は参考にしてください。3つの質問は改行して出力しますが、番号付けなどはしなくて良いです。"
+        }
+        messages = [system_prompt] + state["messages"]
+        try:
+            response = self.model.invoke(messages)
+            return {"predicted_questions": response.content}
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+            raise
 
     @staticmethod
     async def _get_tools():
