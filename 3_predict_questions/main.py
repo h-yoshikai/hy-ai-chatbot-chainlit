@@ -13,7 +13,7 @@ agent: StateGraph = None
 
 load_dotenv()
 api_key =os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(model_name="gpt-4.1-nano", temperature=0)
+llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0)
 
 # create agent asyncronously because getting MCP tools is asyncronous
 async def create_agent():
@@ -39,25 +39,30 @@ async def on_message(msg: cl.Message):
     config = {"configurable": {"thread_id": cl.context.session.id}}
     final_answer = cl.Message(content="")
     ai_content = ""
+    predicted_questions = ""
 
     async with cl.Step(name="Agent", type="agent") as final_step:
-        async with cl.Step(name="Tool", type="tool", parent_id=final_step.id) as tool_step:
-            async with cl.Step(name="LLM", type="llm", parent_id=final_step.id) as normal_step:
-                # invoke llm
-                async for msg, metadata in agent.astream({"messages": history}, stream_mode="messages", config=RunnableConfig(**config)):
-                    node = metadata.get("langgraph_node")
-                    if msg.content and node == "normal":
-                        await normal_step.stream_token(msg.content)
-                    elif msg.content and node == "tools":
-                        await tool_step.stream_token(msg.content)
-                    elif (
-                        msg.content
-                        and not isinstance(msg, HumanMessage)
-                        and node == "final"
-                    ):
-                        ai_content += msg.content
-                        await final_answer.stream_token(msg.content)
-                        await final_step.stream_token(msg.content)
+        async with cl.Step(name="Prediction", type="llm", parent_id=final_step.id) as prediction_step:
+            async with cl.Step(name="Tool", type="tool", parent_id=final_step.id) as tool_step:
+                async with cl.Step(name="LLM", type="llm", parent_id=final_step.id) as normal_step:
+                    # invoke llm
+                    async for msg, metadata in agent.astream({"messages": history}, stream_mode="messages", config=RunnableConfig(**config)):
+                        node = metadata.get("langgraph_node")
+                        if msg.content and node == "normal":
+                            await normal_step.stream_token(msg.content)
+                        elif msg.content and node == "tools":
+                            await tool_step.stream_token(msg.content)
+                        elif msg.content and node == "prediction":
+                            predicted_questions += msg.content
+                            await prediction_step.stream_token(msg.content)
+                        elif (
+                            msg.content
+                            and not isinstance(msg, HumanMessage)
+                            and node == "final"
+                        ):
+                            ai_content += msg.content
+                            await final_answer.stream_token(msg.content)
+                            await final_step.stream_token(msg.content)
 
     # add an AI's answer to history
     if ai_content:
@@ -65,3 +70,20 @@ async def on_message(msg: cl.Message):
     cl.user_session.set("history", history)
 
     await final_answer.send()
+
+    next_questions = [q.strip() for q in predicted_questions.split('\n') if q.strip()]
+    actions = [
+        cl.Action(
+            name=f"predicted_question",
+            payload={"value": q},
+            label=q
+        )
+        for _, q in enumerate(next_questions)
+    ]
+    await cl.Message(content="関連", actions=actions).send()
+
+@cl.action_callback("predicted_question")
+async def on_action(action: cl.Action):
+    await cl.Message(content=action.payload["value"], author="user").send()
+    # generate an answer against the action that user pressed
+    await on_message(cl.Message(content=action.payload["value"]))
