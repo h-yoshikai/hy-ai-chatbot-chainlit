@@ -12,7 +12,6 @@ import os
 agent: StateGraph = None
 
 load_dotenv()
-api_key =os.getenv("OPENAI_API_KEY")
 llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0)
 
 # create agent asyncronously because getting MCP tools is asyncronous
