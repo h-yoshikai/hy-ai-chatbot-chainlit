@@ -7,7 +7,17 @@
    ```
    pip install -r requirements.txt
    ```
-3. Run sample codes
+3. Prepare `.env`
+   1. `OPENAI_API_KEY`
+   2. `CHAINLIT_AUTH_SECRET`
+      ```
+      chainlit create-secret
+      ```
+   3. For Google OAuth
+      1. `OAUTH_GOOGLE_CLIENT_ID`
+      2. `OAUTH_GOOGLE_CLIENT_SECRET`
+   4. DB related
+4. Run sample codes
    1. Simple Agent
       ```
       cd 1_simple_agent
