@@ -38,3 +38,8 @@
       cd 4_db
       docker compose -f docker-compose.yaml up -d --build
       ```
+
+## For study
+
+To see code differences, check out Pull Requests.
+You can see the differences from 1 to 4 in sequence.
